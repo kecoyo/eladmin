@@ -15,13 +15,15 @@
  */
 package me.zhengjie.modules.system.service.dto;
 
-import com.alibaba.fastjson.annotation.JSONField;
-import lombok.Getter;
-import lombok.Setter;
-import me.zhengjie.base.BaseDTO;
 import java.io.Serializable;
 import java.util.Date;
 import java.util.Set;
+
+import com.alibaba.fastjson.annotation.JSONField;
+
+import lombok.Getter;
+import lombok.Setter;
+import me.zhengjie.base.BaseDTO;
 
 /**
  * @author Zheng Jie
@@ -64,4 +66,6 @@ public class UserDto extends BaseDTO implements Serializable {
     private Boolean isAdmin = false;
 
     private Date pwdResetTime;
+
+    private String userArea;
 }

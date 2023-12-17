@@ -15,18 +15,30 @@
  */
 package me.zhengjie.modules.system.domain;
 
-import io.swagger.annotations.ApiModelProperty;
-import lombok.Getter;
-import lombok.Setter;
-import me.zhengjie.base.BaseEntity;
-import javax.persistence.*;
-import javax.validation.constraints.Email;
-import javax.validation.constraints.NotBlank;
-import javax.validation.constraints.NotNull;
 import java.io.Serializable;
 import java.util.Date;
 import java.util.Objects;
 import java.util.Set;
+
+import javax.persistence.Column;
+import javax.persistence.Entity;
+import javax.persistence.FetchType;
+import javax.persistence.GeneratedValue;
+import javax.persistence.GenerationType;
+import javax.persistence.Id;
+import javax.persistence.JoinColumn;
+import javax.persistence.JoinTable;
+import javax.persistence.ManyToMany;
+import javax.persistence.OneToOne;
+import javax.persistence.Table;
+import javax.validation.constraints.Email;
+import javax.validation.constraints.NotBlank;
+import javax.validation.constraints.NotNull;
+
+import io.swagger.annotations.ApiModelProperty;
+import lombok.Getter;
+import lombok.Setter;
+import me.zhengjie.base.BaseEntity;
 
 /**
  * @author Zheng Jie
@@ -35,28 +47,27 @@ import java.util.Set;
 @Entity
 @Getter
 @Setter
-@Table(name="sys_user")
+@Table(name = "sys_user")
 public class User extends BaseEntity implements Serializable {
 
     @Id
     @Column(name = "user_id")
     @NotNull(groups = Update.class)
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     @ApiModelProperty(value = "ID", hidden = true)
     private Long id;
 
     @ManyToMany(fetch = FetchType.EAGER)
     @ApiModelProperty(value = "用户角色")
-    @JoinTable(name = "sys_users_roles",
-            joinColumns = {@JoinColumn(name = "user_id",referencedColumnName = "user_id")},
-            inverseJoinColumns = {@JoinColumn(name = "role_id",referencedColumnName = "role_id")})
+    @JoinTable(name = "sys_users_roles", joinColumns = {
+            @JoinColumn(name = "user_id", referencedColumnName = "user_id") }, inverseJoinColumns = {
+                    @JoinColumn(name = "role_id", referencedColumnName = "role_id") })
     private Set<Role> roles;
 
     @ManyToMany(fetch = FetchType.EAGER)
     @ApiModelProperty(value = "用户岗位")
-    @JoinTable(name = "sys_users_jobs",
-            joinColumns = {@JoinColumn(name = "user_id",referencedColumnName = "user_id")},
-            inverseJoinColumns = {@JoinColumn(name = "job_id",referencedColumnName = "job_id")})
+    @JoinTable(name = "sys_users_jobs", joinColumns = {
+            @JoinColumn(name = "user_id", referencedColumnName = "user_id") }, inverseJoinColumns = {
+                    @JoinColumn(name = "job_id", referencedColumnName = "job_id") })
     private Set<Job> jobs;
 
     @OneToOne
@@ -85,7 +96,7 @@ public class User extends BaseEntity implements Serializable {
     @ApiModelProperty(value = "用户性别")
     private String gender;
 
-    @ApiModelProperty(value = "头像真实名称",hidden = true)
+    @ApiModelProperty(value = "头像真实名称", hidden = true)
     private String avatarName;
 
     @ApiModelProperty(value = "头像存储的路径", hidden = true)
@@ -104,6 +115,9 @@ public class User extends BaseEntity implements Serializable {
     @Column(name = "pwd_reset_time")
     @ApiModelProperty(value = "最后修改密码的时间", hidden = true)
     private Date pwdResetTime;
+
+    @ApiModelProperty(value = "用户区域", hidden = true)
+    private String userArea;
 
     @Override
     public boolean equals(Object o) {

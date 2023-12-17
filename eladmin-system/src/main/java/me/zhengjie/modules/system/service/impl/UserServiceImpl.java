@@ -15,21 +15,21 @@
  */
 package me.zhengjie.modules.system.service.impl;
 
-import lombok.RequiredArgsConstructor;
-import me.zhengjie.utils.PageResult;
-import me.zhengjie.config.FileProperties;
-import me.zhengjie.exception.BadRequestException;
-import me.zhengjie.modules.security.service.OnlineUserService;
-import me.zhengjie.modules.security.service.UserCacheManager;
-import me.zhengjie.modules.system.domain.User;
-import me.zhengjie.exception.EntityExistException;
-import me.zhengjie.exception.EntityNotFoundException;
-import me.zhengjie.modules.system.repository.UserRepository;
-import me.zhengjie.modules.system.service.UserService;
-import me.zhengjie.modules.system.service.dto.*;
-import me.zhengjie.modules.system.service.mapstruct.UserLoginMapper;
-import me.zhengjie.modules.system.service.mapstruct.UserMapper;
-import me.zhengjie.utils.*;
+import java.io.File;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import javax.servlet.http.HttpServletResponse;
+import javax.validation.constraints.NotBlank;
+
 import org.springframework.cache.annotation.CacheConfig;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
@@ -37,12 +37,38 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
-import javax.servlet.http.HttpServletResponse;
-import javax.validation.constraints.NotBlank;
-import java.io.File;
-import java.io.IOException;
-import java.util.*;
-import java.util.stream.Collectors;
+
+import com.alibaba.fastjson.JSONArray;
+import com.alibaba.fastjson.JSONObject;
+
+import lombok.RequiredArgsConstructor;
+import me.zhengjie.config.FileProperties;
+import me.zhengjie.exception.BadRequestException;
+import me.zhengjie.exception.EntityExistException;
+import me.zhengjie.exception.EntityNotFoundException;
+import me.zhengjie.modules.security.service.OnlineUserService;
+import me.zhengjie.modules.security.service.UserCacheManager;
+import me.zhengjie.modules.system.domain.User;
+import me.zhengjie.modules.system.repository.UserRepository;
+import me.zhengjie.modules.system.service.UserService;
+import me.zhengjie.modules.system.service.dto.JobSmallDto;
+import me.zhengjie.modules.system.service.dto.RoleSmallDto;
+import me.zhengjie.modules.system.service.dto.UserDto;
+import me.zhengjie.modules.system.service.dto.UserLoginDto;
+import me.zhengjie.modules.system.service.dto.UserQueryCriteria;
+import me.zhengjie.modules.system.service.mapstruct.UserLoginMapper;
+import me.zhengjie.modules.system.service.mapstruct.UserMapper;
+import me.zhengjie.utils.CacheKey;
+import me.zhengjie.utils.FileUtil;
+import me.zhengjie.utils.HttpClientResult;
+import me.zhengjie.utils.HttpClientUtils;
+import me.zhengjie.utils.PageResult;
+import me.zhengjie.utils.PageUtil;
+import me.zhengjie.utils.QueryHelp;
+import me.zhengjie.utils.RedisUtils;
+import me.zhengjie.utils.SecurityUtils;
+import me.zhengjie.utils.StringUtils;
+import me.zhengjie.utils.ValidationUtil;
 
 /**
  * @author Zheng Jie
@@ -63,13 +89,16 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public PageResult<UserDto> queryAll(UserQueryCriteria criteria, Pageable pageable) {
-        Page<User> page = userRepository.findAll((root, criteriaQuery, criteriaBuilder) -> QueryHelp.getPredicate(root, criteria, criteriaBuilder), pageable);
+        Page<User> page = userRepository.findAll(
+                (root, criteriaQuery, criteriaBuilder) -> QueryHelp.getPredicate(root, criteria, criteriaBuilder),
+                pageable);
         return PageUtil.toPage(page.map(userMapper::toDto));
     }
 
     @Override
     public List<UserDto> queryAll(UserQueryCriteria criteria) {
-        List<User> users = userRepository.findAll((root, criteriaQuery, criteriaBuilder) -> QueryHelp.getPredicate(root, criteria, criteriaBuilder));
+        List<User> users = userRepository.findAll(
+                (root, criteriaQuery, criteriaBuilder) -> QueryHelp.getPredicate(root, criteria, criteriaBuilder));
         return userMapper.toDto(users);
     }
 
@@ -84,17 +113,41 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void create(User resources) {
+    public void create(User resources) throws Exception {
         if (userRepository.findByUsername(resources.getUsername()) != null) {
             throw new EntityExistException(User.class, "username", resources.getUsername());
         }
-        if (userRepository.findByEmail(resources.getEmail()) != null) {
-            throw new EntityExistException(User.class, "email", resources.getEmail());
-        }
+        // if (userRepository.findByEmail(resources.getEmail()) != null) {
+        // throw new EntityExistException(User.class, "email", resources.getEmail());
+        // }
         if (userRepository.findByPhone(resources.getPhone()) != null) {
             throw new EntityExistException(User.class, "phone", resources.getPhone());
         }
+
+        // 添加ljadmin用户，使用返回的userId
+        long userId = addLjAdminUser(resources);
+        resources.setId(userId);
+
         userRepository.save(resources);
+    }
+
+    // 添加ljadmin用户
+    private long addLjAdminUser(User resources) throws Exception {
+        JSONObject json = new JSONObject();
+        json.put("name", resources.getNickName());
+        json.put("phone", resources.getPhone());
+        json.put("gender", "男".equals(resources.getGender()) ? 1 : 2);
+        json.put("role", resources.getRoles().iterator().next().getId()); // 只有一个角色
+        json.put("areaRange", usreAreaToAreaRange(resources.getUserArea())); // 区域范围
+        json.put("operator", SecurityUtils.getCurrentUserId());
+        HttpClientResult result = HttpClientUtils.doPost("http://localhost:8013/ljadmin/user/addUser", json);
+
+        if (result.getStatus() != 200) {
+            throw new Exception(result.getMessage());
+        }
+
+        JSONObject user = (JSONObject) result.getBody();
+        return user.getLong("userId");
     }
 
     @Override
@@ -103,17 +156,21 @@ public class UserServiceImpl implements UserService {
         User user = userRepository.findById(resources.getId()).orElseGet(User::new);
         ValidationUtil.isNull(user.getId(), "User", "id", resources.getId());
         User user1 = userRepository.findByUsername(resources.getUsername());
-        User user2 = userRepository.findByEmail(resources.getEmail());
+        // User user2 = userRepository.findByEmail(resources.getEmail());
         User user3 = userRepository.findByPhone(resources.getPhone());
         if (user1 != null && !user.getId().equals(user1.getId())) {
             throw new EntityExistException(User.class, "username", resources.getUsername());
         }
-        if (user2 != null && !user.getId().equals(user2.getId())) {
-            throw new EntityExistException(User.class, "email", resources.getEmail());
-        }
+        // if (user2 != null && !user.getId().equals(user2.getId())) {
+        // throw new EntityExistException(User.class, "email", resources.getEmail());
+        // }
         if (user3 != null && !user.getId().equals(user3.getId())) {
             throw new EntityExistException(User.class, "phone", resources.getPhone());
         }
+
+        // 修改ljadmin用户
+        updateLjAdminUser(resources);
+
         // 如果用户的角色改变
         if (!resources.getRoles().equals(user.getRoles())) {
             redisUtils.del(CacheKey.DATA_USER + resources.getId());
@@ -121,12 +178,18 @@ public class UserServiceImpl implements UserService {
             redisUtils.del(CacheKey.ROLE_AUTH + resources.getId());
         }
         // 修改部门会影响 数据权限
-        if (!Objects.equals(resources.getDept(),user.getDept())) {
+        if (!Objects.equals(resources.getDept(), user.getDept())) {
             redisUtils.del(CacheKey.DATA_USER + resources.getId());
         }
         // 如果用户被禁用，则清除用户登录信息
-        if(!resources.getEnabled()){
+        if (!resources.getEnabled()) {
             onlineUserService.kickOutForUsername(resources.getUsername());
+            
+            // 修改ljadmin用户状态，0-正常，1-禁用
+            updateLjAdminUserStatus(resources.getId(), 1);
+        } else {
+            // 修改ljadmin用户状态，0-正常，1-禁用
+            updateLjAdminUserStatus(resources.getId(), 0);
         }
         user.setUsername(resources.getUsername());
         user.setEmail(resources.getEmail());
@@ -137,9 +200,62 @@ public class UserServiceImpl implements UserService {
         user.setPhone(resources.getPhone());
         user.setNickName(resources.getNickName());
         user.setGender(resources.getGender());
+        user.setUserArea(resources.getUserArea()); // 用户区域
         userRepository.save(user);
         // 清除缓存
         delCaches(user.getId(), user.getUsername());
+    }
+
+    // 修改ljadmin用户
+    private void updateLjAdminUser(User resources) throws Exception {
+        // 排除掉admin用户（id=1），ljadmin用户（id < 1000000）
+        if (resources.getId() < 1000) {
+            return;
+        }
+
+        JSONObject json = new JSONObject();
+        json.put("userId", resources.getId());
+        json.put("name", resources.getNickName());
+        json.put("phone", resources.getPhone());
+        json.put("gender", "男".equals(resources.getGender()) ? "1" : "2");
+        json.put("role", resources.getRoles().iterator().next().getId()); // 只有一个角色
+        json.put("areaRange", usreAreaToAreaRange(resources.getUserArea())); // 区域范围
+        json.put("operator", SecurityUtils.getCurrentUserId());
+        HttpClientResult result = HttpClientUtils.doPost("http://localhost:8013/ljadmin/user/updateUser", json);
+
+        if (result.getStatus() != 200) {
+            throw new Exception(result.getMessage());
+        }
+    }
+
+    // 修改ljadmin用户状态
+    private void updateLjAdminUserStatus(Long userId, Integer status) throws Exception {
+        // 排除掉admin用户（id=1），ljadmin用户（id < 1000000）
+        if (userId < 1000) {
+            return;
+        }
+
+        JSONObject json = new JSONObject();
+        json.put("userId", userId);
+        json.put("status", status);
+        json.put("operator", SecurityUtils.getCurrentUserId());
+        HttpClientResult result = HttpClientUtils.doPost("http://localhost:8013/ljadmin/user/updateUserStatus", json);
+
+        if (result.getStatus() != 200) {
+            throw new Exception(result.getMessage());
+        }
+    }
+
+    // 用户区域转换为区域范围
+    private String usreAreaToAreaRange(String userArea) {
+        JSONArray userAreas = JSONObject.parseArray(userArea);
+
+        List<Integer> areaRange = userAreas.stream().map(area -> {
+            JSONArray areaArray = (JSONArray) area;
+            return (Integer) areaArray.get(areaArray.size() - 1);
+        }).collect(Collectors.toList());
+
+        return StringUtils.join(areaRange, ",");
     }
 
     @Override
@@ -160,11 +276,14 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void delete(Set<Long> ids) {
+    public void delete(Set<Long> ids) throws Exception {
         for (Long id : ids) {
             // 清理缓存
             UserDto user = findById(id);
             delCaches(user.getId(), user.getUsername());
+
+            // 修改ljadmin用户状态，0-正常，1-禁用
+            updateLjAdminUserStatus(id, 1);
         }
         userRepository.deleteAllByIdIn(ids);
     }
@@ -210,8 +329,8 @@ public class UserServiceImpl implements UserService {
         // 验证文件上传的格式
         String image = "gif jpg png jpeg";
         String fileType = FileUtil.getExtensionName(multipartFile.getOriginalFilename());
-        if(fileType != null && !image.contains(fileType)){
-            throw new BadRequestException("文件格式错误！, 仅支持 " + image +" 格式");
+        if (fileType != null && !image.contains(fileType)) {
+            throw new BadRequestException("文件格式错误！, 仅支持 " + image + " 格式");
         }
         User user = userRepository.findByUsername(SecurityUtils.getCurrentUsername());
         String oldPath = user.getAvatarPath();
@@ -222,11 +341,14 @@ public class UserServiceImpl implements UserService {
         if (StringUtils.isNotBlank(oldPath)) {
             FileUtil.del(oldPath);
         }
-        @NotBlank String username = user.getUsername();
+        @NotBlank
+        String username = user.getUsername();
         flushCache(username);
-        return new HashMap<String, String>(1) {{
-            put("avatar", file.getName());
-        }};
+        return new HashMap<String, String>(1) {
+            {
+                put("avatar", file.getName());
+            }
+        };
     }
 
     @Override

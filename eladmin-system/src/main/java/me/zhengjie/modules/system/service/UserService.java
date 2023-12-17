@@ -44,8 +44,9 @@ public interface UserService {
     /**
      * 新增用户
      * @param resources /
+     * @throws Exception
      */
-    void create(User resources);
+    void create(User resources) throws Exception;
 
     /**
      * 编辑用户
@@ -57,8 +58,9 @@ public interface UserService {
     /**
      * 删除用户
      * @param ids /
+     * @throws Exception
      */
-    void delete(Set<Long> ids);
+    void delete(Set<Long> ids) throws Exception;
 
     /**
      * 根据用户名查询

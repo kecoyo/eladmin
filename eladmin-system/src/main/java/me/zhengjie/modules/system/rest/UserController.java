@@ -107,7 +107,7 @@ public class UserController {
     @ApiOperation("新增用户")
     @PostMapping
     @PreAuthorize("@el.check('user:add')")
-    public ResponseEntity<Object> createUser(@Validated @RequestBody User resources){
+    public ResponseEntity<Object> createUser(@Validated @RequestBody User resources) throws Exception{
         checkLevel(resources);
         // 默认密码 123456
         resources.setPassword(passwordEncoder.encode("123456"));
