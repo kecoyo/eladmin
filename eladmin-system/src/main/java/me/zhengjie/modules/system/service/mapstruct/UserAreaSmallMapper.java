@@ -19,14 +19,13 @@ import org.mapstruct.Mapper;
 import org.mapstruct.ReportingPolicy;
 
 import me.zhengjie.base.BaseMapper;
-import me.zhengjie.modules.system.domain.User;
-import me.zhengjie.modules.system.service.dto.UserLoginDto;
+import me.zhengjie.modules.system.domain.UserArea;
+import me.zhengjie.modules.system.service.dto.UserAreaSmallDto;
 
 /**
- * @author Zheng Jie
- * @date 2018-11-23
- */
-@Mapper(componentModel = "spring", uses = { RoleMapper.class, DeptMapper.class, JobMapper.class,
-    UserAreaSmallMapper.class }, unmappedTargetPolicy = ReportingPolicy.IGNORE)
-public interface UserLoginMapper extends BaseMapper<UserLoginDto, User> {
+ * 
+*/
+@Mapper(componentModel = "spring", unmappedTargetPolicy = ReportingPolicy.IGNORE)
+public interface UserAreaSmallMapper extends BaseMapper<UserAreaSmallDto, UserArea> {
+
 }

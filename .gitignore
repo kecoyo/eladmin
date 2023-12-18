@@ -1,5 +1,6 @@
 ### IDEA ###
 .idea/*
+.vscode/*
 *.iml
 */target/*
 */*.iml

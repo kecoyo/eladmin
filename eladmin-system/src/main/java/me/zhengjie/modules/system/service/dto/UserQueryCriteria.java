@@ -37,7 +37,7 @@ public class UserQueryCriteria implements Serializable {
     private Set<Long> deptIds = new HashSet<>();
 
     @Query(blurry = "email,username,nickName")
-    private String blurry;
+    private String blurry = "";
 
     @Query
     private Boolean enabled;
@@ -46,4 +46,13 @@ public class UserQueryCriteria implements Serializable {
 
     @Query(type = Query.Type.BETWEEN)
     private List<Timestamp> createTime;
+
+    @Query(propName = "province", joinName = "userAreas")
+    private Integer province = 0;
+
+    @Query(propName = "city", joinName = "userAreas")
+    private Integer city = 0;
+
+    @Query(propName = "county", joinName = "userAreas")
+    private Integer county = 0;
 }

@@ -17,6 +17,7 @@ package me.zhengjie.modules.system.service.dto;
 
 import java.io.Serializable;
 import java.util.Date;
+import java.util.List;
 import java.util.Set;
 
 import com.alibaba.fastjson.annotation.JSONField;
@@ -67,5 +68,5 @@ public class UserDto extends BaseDTO implements Serializable {
 
     private Date pwdResetTime;
 
-    private String userArea;
+    private List<UserAreaSmallDto> userAreas;
 }

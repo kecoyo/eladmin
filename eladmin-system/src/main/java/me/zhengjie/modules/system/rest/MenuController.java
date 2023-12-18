@@ -24,7 +24,6 @@ import me.zhengjie.modules.system.domain.Menu;
 import me.zhengjie.exception.BadRequestException;
 import me.zhengjie.modules.system.domain.vo.MenuVo;
 import me.zhengjie.modules.system.service.MenuService;
-import me.zhengjie.modules.system.service.dto.DeptDto;
 import me.zhengjie.modules.system.service.dto.MenuDto;
 import me.zhengjie.modules.system.service.dto.MenuQueryCriteria;
 import me.zhengjie.modules.system.service.mapstruct.MenuMapper;

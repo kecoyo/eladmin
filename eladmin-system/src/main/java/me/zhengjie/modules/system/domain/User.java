@@ -17,18 +17,19 @@ package me.zhengjie.modules.system.domain;
 
 import java.io.Serializable;
 import java.util.Date;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
+import javax.persistence.CascadeType;
 import javax.persistence.Column;
 import javax.persistence.Entity;
 import javax.persistence.FetchType;
-import javax.persistence.GeneratedValue;
-import javax.persistence.GenerationType;
 import javax.persistence.Id;
 import javax.persistence.JoinColumn;
 import javax.persistence.JoinTable;
 import javax.persistence.ManyToMany;
+import javax.persistence.OneToMany;
 import javax.persistence.OneToOne;
 import javax.persistence.Table;
 import javax.validation.constraints.Email;
@@ -69,6 +70,10 @@ public class User extends BaseEntity implements Serializable {
             @JoinColumn(name = "user_id", referencedColumnName = "user_id") }, inverseJoinColumns = {
                     @JoinColumn(name = "job_id", referencedColumnName = "job_id") })
     private Set<Job> jobs;
+
+    @OneToMany(mappedBy = "user", cascade = { CascadeType.ALL }, fetch = FetchType.EAGER, orphanRemoval = true)
+    @ApiModelProperty(value = "用户区域")
+    private List<UserArea> userAreas;
 
     @OneToOne
     @JoinColumn(name = "dept_id")
@@ -115,9 +120,6 @@ public class User extends BaseEntity implements Serializable {
     @Column(name = "pwd_reset_time")
     @ApiModelProperty(value = "最后修改密码的时间", hidden = true)
     private Date pwdResetTime;
-
-    @ApiModelProperty(value = "用户区域", hidden = true)
-    private String userArea;
 
     @Override
     public boolean equals(Object o) {

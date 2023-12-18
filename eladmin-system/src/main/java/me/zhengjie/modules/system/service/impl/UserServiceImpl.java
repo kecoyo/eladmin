@@ -18,6 +18,7 @@ package me.zhengjie.modules.system.service.impl;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -32,13 +33,11 @@ import javax.validation.constraints.NotBlank;
 
 import org.springframework.cache.annotation.CacheConfig;
 import org.springframework.cache.annotation.Cacheable;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
-import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
 
 import lombok.RequiredArgsConstructor;
@@ -49,7 +48,9 @@ import me.zhengjie.exception.EntityNotFoundException;
 import me.zhengjie.modules.security.service.OnlineUserService;
 import me.zhengjie.modules.security.service.UserCacheManager;
 import me.zhengjie.modules.system.domain.User;
+import me.zhengjie.modules.system.domain.UserArea;
 import me.zhengjie.modules.system.repository.UserRepository;
+import me.zhengjie.modules.system.service.RoleService;
 import me.zhengjie.modules.system.service.UserService;
 import me.zhengjie.modules.system.service.dto.JobSmallDto;
 import me.zhengjie.modules.system.service.dto.RoleSmallDto;
@@ -86,13 +87,38 @@ public class UserServiceImpl implements UserService {
     private final UserCacheManager userCacheManager;
     private final OnlineUserService onlineUserService;
     private final UserLoginMapper userLoginMapper;
+    private final RoleService roleService;
 
     @Override
     public PageResult<UserDto> queryAll(UserQueryCriteria criteria, Pageable pageable) {
-        Page<User> page = userRepository.findAll(
-                (root, criteriaQuery, criteriaBuilder) -> QueryHelp.getPredicate(root, criteria, criteriaBuilder),
-                pageable);
-        return PageUtil.toPage(page.map(userMapper::toDto));
+        // Page<User> page = userRepository.findAll(
+        // (root, criteriaQuery, criteriaBuilder) -> QueryHelp.getPredicate(root,
+        // criteria, criteriaBuilder),
+        // pageable);
+        // return PageUtil.toPage(page.map(userMapper::toDto));
+
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+        Integer currentLevel = Collections.min(roleService.findByUsersId(SecurityUtils.getCurrentUserId()).stream()
+                .map(RoleSmallDto::getLevel).collect(Collectors.toList()));
+        int enabled = criteria.getEnabled() == null ? -1 : criteria.getEnabled() ? 1 : 0;
+        int pageStart = pageable.getPageNumber() * pageable.getPageSize();
+        int pageSize = pageable.getPageSize();
+
+        List<User> list = null;
+        long total = 0;
+
+        if (criteria.getProvince() == 0) {
+            list = userRepository.findByAllUserArea(currentUserId, currentLevel, criteria.getBlurry(), enabled,
+                    pageStart, pageSize);
+            total = userRepository.countByAllUserArea(currentUserId, currentLevel, criteria.getBlurry(), enabled);
+        } else {
+            list = userRepository.findByUserArea(criteria.getProvince(), criteria.getCity(), criteria.getCounty(),
+                    currentLevel, criteria.getBlurry(), enabled, pageStart, pageSize);
+            total = userRepository.countByUserArea(criteria.getProvince(), criteria.getCity(), criteria.getCounty(),
+                    currentLevel, criteria.getBlurry(), enabled);
+        }
+        return PageUtil.toPage(list.stream().map(userMapper::toDto).collect(Collectors.toList()), total);
+
     }
 
     @Override
@@ -138,7 +164,7 @@ public class UserServiceImpl implements UserService {
         json.put("phone", resources.getPhone());
         json.put("gender", "男".equals(resources.getGender()) ? 1 : 2);
         json.put("role", resources.getRoles().iterator().next().getId()); // 只有一个角色
-        json.put("areaRange", usreAreaToAreaRange(resources.getUserArea())); // 区域范围
+        json.put("areaRange", usreAreaToAreaRange(resources.getUserAreas())); // 区域范围
         json.put("operator", SecurityUtils.getCurrentUserId());
         HttpClientResult result = HttpClientUtils.doPost("http://localhost:8013/ljadmin/user/addUser", json);
 
@@ -184,7 +210,7 @@ public class UserServiceImpl implements UserService {
         // 如果用户被禁用，则清除用户登录信息
         if (!resources.getEnabled()) {
             onlineUserService.kickOutForUsername(resources.getUsername());
-            
+
             // 修改ljadmin用户状态，0-正常，1-禁用
             updateLjAdminUserStatus(resources.getId(), 1);
         } else {
@@ -200,7 +226,18 @@ public class UserServiceImpl implements UserService {
         user.setPhone(resources.getPhone());
         user.setNickName(resources.getNickName());
         user.setGender(resources.getGender());
-        user.setUserArea(resources.getUserArea()); // 用户区域
+
+        // 更新用户区域
+        for (UserArea userArea : resources.getUserAreas()) {
+            userArea.setUser(user);
+            int index = user.getUserAreas().indexOf(userArea);
+            if (index != -1) {
+                userArea.setId(user.getUserAreas().get(index).getId());
+            }
+        }
+        user.getUserAreas().clear();
+        user.getUserAreas().addAll(resources.getUserAreas()); // 用户区域
+
         userRepository.save(user);
         // 清除缓存
         delCaches(user.getId(), user.getUsername());
@@ -219,7 +256,7 @@ public class UserServiceImpl implements UserService {
         json.put("phone", resources.getPhone());
         json.put("gender", "男".equals(resources.getGender()) ? "1" : "2");
         json.put("role", resources.getRoles().iterator().next().getId()); // 只有一个角色
-        json.put("areaRange", usreAreaToAreaRange(resources.getUserArea())); // 区域范围
+        json.put("areaRange", usreAreaToAreaRange(resources.getUserAreas())); // 区域范围
         json.put("operator", SecurityUtils.getCurrentUserId());
         HttpClientResult result = HttpClientUtils.doPost("http://localhost:8013/ljadmin/user/updateUser", json);
 
@@ -247,12 +284,11 @@ public class UserServiceImpl implements UserService {
     }
 
     // 用户区域转换为区域范围
-    private String usreAreaToAreaRange(String userArea) {
-        JSONArray userAreas = JSONObject.parseArray(userArea);
-
-        List<Integer> areaRange = userAreas.stream().map(area -> {
-            JSONArray areaArray = (JSONArray) area;
-            return (Integer) areaArray.get(areaArray.size() - 1);
+    private String usreAreaToAreaRange(List<UserArea> userAreas) {
+        List<Integer> areaRange = userAreas.stream().map(userArea -> {
+            return userArea.getCounty() != 0 ? userArea.getCounty()
+                    : userArea.getCity() != 0 ? userArea.getCity()
+                            : userArea.getProvince();
         }).collect(Collectors.toList());
 
         return StringUtils.join(areaRange, ",");

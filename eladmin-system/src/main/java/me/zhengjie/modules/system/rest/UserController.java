@@ -140,7 +140,7 @@ public class UserController {
     @ApiOperation("删除用户")
     @DeleteMapping
     @PreAuthorize("@el.check('user:del')")
-    public ResponseEntity<Object> deleteUser(@RequestBody Set<Long> ids){
+    public ResponseEntity<Object> deleteUser(@RequestBody Set<Long> ids) throws Exception{
         for (Long id : ids) {
             Integer currentLevel =  Collections.min(roleService.findByUsersId(SecurityUtils.getCurrentUserId()).stream().map(RoleSmallDto::getLevel).collect(Collectors.toList()));
             Integer optLevel =  Collections.min(roleService.findByUsersId(id).stream().map(RoleSmallDto::getLevel).collect(Collectors.toList()));
